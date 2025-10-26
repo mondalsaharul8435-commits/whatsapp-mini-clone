@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>সহজ রিয়েল-টাইম চ্যাট</title>
+    <title>WhatsApp-স্টাইল চ্যাট অ্যাপ</title>
     <!-- Load Tailwind CSS for modern styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Emoji Picker Script -->
@@ -15,6 +15,9 @@
             overflow-y: auto;
             scroll-behavior: smooth;
             padding: 1rem;
+            /* Added chat background image for WhatsApp feel */
+            background-image: url('https://placehold.co/600x600/E8E8E8/E8E8E8?text='); 
+            background-size: cover;
         }
         .my-message {
             background-color: #DCF8C6; /* Light green/WhatsApp sender color */
@@ -30,7 +33,7 @@
             overflow: hidden; 
         }
         /* Style for the name setting modal/view */
-        #name-setup-view {
+        .full-screen-view {
             position: absolute;
             top: 0;
             left: 0;
@@ -45,7 +48,7 @@
         /* Style the emoji picker container to float above the input */
         #emoji-picker-container {
             position: absolute;
-            bottom: 65px; /* Adjust based on input area height */
+            bottom: 65px; 
             right: 15px;
             z-index: 100;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -55,7 +58,7 @@
         }
         emoji-picker {
             --background: #fff;
-            --indicator-color: #10B981; /* Teal 500 */
+            --indicator-color: #075E54; /* WhatsApp Teal */
             --border-color: #E5E7EB;
             --input-bg-color: #F3F4F6;
             width: 300px; /* Mobile friendly size */
@@ -66,10 +69,19 @@
                 width: 100vw;
              }
              #emoji-picker-container {
-                 bottom: 75px; /* Taller input on small screens */
+                 bottom: 75px; 
                  right: 0;
                  left: 0;
              }
+        }
+        /* Style for the chat header (WhatsApp Green) */
+        #chat-app-header {
+            background-color: #075E54; /* WhatsApp Green */
+        }
+        /* Style for chat header title font */
+        #chat-header-title {
+            color: #ffffff;
+            font-weight: 600;
         }
     </style>
 </head>
@@ -77,7 +89,7 @@
     <script type="module">
         // Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, addDoc, onSnapshot, collection, query, orderBy, serverTimestamp, setLogLevel, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global Variables
@@ -85,24 +97,38 @@
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
+        // SIMULATED OTP: Use this fixed PIN for verification
+        const SIMULATED_OTP = '1234'; 
+
         let db, auth, userId = null;
         let isAuthReady = false;
         
         // State variables for managing views and chats
-        let currentView = 'setup'; // Initial state is 'setup' to set name
+        let currentView = 'setup'; 
         let currentRecipientId = null;
         let currentRecipientName = null;
         let userDisplayName = null;
+        let userPhoneNumber = null;
         let unsubscribeChat = null;
-        let userStatusListener = null; // For listening to the recipient's status
+        let userStatusListener = null; 
+        
+        // Temporary state for registration process
+        let tempDisplayName = null;
+        let tempPhoneNumber = null;
 
         setLogLevel('debug'); 
 
         // HTML elements
         const appContainer = document.getElementById('app-container');
         const setupView = document.getElementById('name-setup-view');
+        const otpView = document.getElementById('otp-verification-view'); // New OTP view
         const displayNameInput = document.getElementById('display-name-input');
-        const saveNameButton = document.getElementById('save-name-button');
+        const phoneNumberInput = document.getElementById('phone-number-input'); 
+        const continueButton = document.getElementById('continue-button'); // Button to send 'OTP'
+        
+        const otpInput = document.getElementById('otp-input');
+        const verifyOtpButton = document.getElementById('verify-otp-button');
+        const otpPhoneDisplay = document.getElementById('otp-phone-display');
         
         const chatView = document.getElementById('chat-view');
         const usersView = document.getElementById('users-view');
@@ -110,16 +136,14 @@
         const userListContainer = document.getElementById('user-list-container');
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
-        const statusEl = document.getElementById('status');
         const userIdEl = document.getElementById('user-id-display');
-        const tabGroupChat = document.getElementById('tab-group-chat');
-        const tabUsers = document.getElementById('tab-users');
         const messageInputArea = document.getElementById('message-input-area');
         const backButton = document.getElementById('back-button');
         const chatHeaderTitle = document.getElementById('chat-header-title');
         const chatHeaderSubTitle = document.getElementById('chat-header-subtitle');
         const emojiButton = document.getElementById('emoji-button');
         const emojiPickerContainer = document.getElementById('emoji-picker-container');
+        const chatAppHeader = document.getElementById('chat-app-header');
 
 
         // --- Utility Functions ---
@@ -135,7 +159,7 @@
                 <div id="custom-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div class="bg-white p-6 rounded-lg shadow-2xl max-w-sm w-full mx-4">
                         <p class="text-lg font-medium text-gray-800 mb-4">${message}</p>
-                        <button id="modal-close-button" class="w-full bg-teal-500 text-white p-2 rounded-lg hover:bg-teal-600 transition">
+                        <button id="modal-close-button" class="w-full p-2 bg-green-700 text-white rounded-lg hover:bg-green-800 transition">
                             বন্ধ করুন
                         </button>
                     </div>
@@ -148,6 +172,15 @@
                 modal.remove();
             });
         }
+        
+        /** Formats timestamp to 'HH:MM AM/PM' */
+        function formatTime(timestamp) {
+            if (timestamp && timestamp.toDate) {
+                const date = timestamp.toDate();
+                return date.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
+            }
+            return '';
+        }
 
         /** Clears any active chat listener. */
         function stopListening() {
@@ -158,7 +191,7 @@
             if (userStatusListener) {
                 userStatusListener();
                 userStatusListener = null;
-                chatHeaderSubTitle.textContent = ''; // Clear status when leaving private chat
+                chatHeaderSubTitle.textContent = ''; 
             }
         }
 
@@ -180,24 +213,20 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
-                        userIdEl.textContent = `User ID: ${userId}`;
+                        userIdEl.textContent = `Internal User ID: ${userId}`;
                         isAuthReady = true;
 
-                        // Set up status listener before checking name
                         setupUserStatusUpdater(userId);
-
-                        // Check if user has a display name set
                         await loadAndCheckUserName(userId);
                         
-                        statusEl.textContent = 'চ্যাট অ্যাপ প্রস্তুত।';
                     } else {
-                        statusEl.textContent = 'ব্যবহারকারীর তথ্য লোড হচ্ছে...';
+                        // Not used in this simplified auth flow, but good practice
                     }
                 });
 
             } catch (error) {
                 console.error("Firebase Initialization or Authentication failed:", error);
-                statusEl.textContent = 'Initialization Error. Check console.';
+                alertModal('Firebase Initialization Error. Check console.');
             }
         }
         
@@ -206,61 +235,70 @@
             if (!db || !uid) return;
             const userDocRef = doc(db, `/artifacts/${appId}/public/data/users/`, uid);
 
-            // Function to update status in Firestore
             const updateStatus = async (isOnline) => {
                 try {
-                    await updateDoc(userDocRef, {
-                        isOnline: isOnline,
-                        lastSeen: serverTimestamp()
-                    });
+                    if (userDisplayName && userPhoneNumber) {
+                         await updateDoc(userDocRef, {
+                            isOnline: isOnline,
+                            lastSeen: serverTimestamp()
+                        });
+                    }
                 } catch (e) {
-                    console.warn("Could not update status (may happen before initial name registration):", e.code);
+                    console.warn("Could not update status (may happen before initial registration):", e.code);
                 }
             };
 
-            // Set user online when the window is active
             window.addEventListener('focus', () => updateStatus(true));
-            // Set user offline/last seen when closing or navigating away
             window.addEventListener('blur', () => updateStatus(false));
-            // Set user offline when page is unloaded
             window.addEventListener('beforeunload', () => updateStatus(false)); 
 
-            // Initial status update (will fail silently if name not set yet)
             updateStatus(true);
         }
 
-        // 3. Load the user's display name from Firestore
+        // 3. Load the user's display name and number from Firestore
         async function loadAndCheckUserName(uid) {
              const userDocRef = doc(db, `/artifacts/${appId}/public/data/users/`, uid);
              const docSnap = await getDoc(userDocRef);
              
-             if (docSnap.exists() && docSnap.data().displayName && docSnap.data().displayName !== uid.substring(0, 8) + '...') {
-                 userDisplayName = docSnap.data().displayName;
-                 // After loading name, go to main users list
+             if (docSnap.exists() && docSnap.data().displayName && docSnap.data().phoneNumber) {
+                 const data = docSnap.data();
+                 userDisplayName = data.displayName;
+                 userPhoneNumber = data.phoneNumber;
                  switchView('users'); 
              } else {
-                 // If no name found, show setup
                  switchView('setup');
              }
         }
 
-        // 4. Register or update the user's display name
-        async function registerUser(uid, name) {
-             if (!db || !name) return;
+        // 4. Final step: Register the user after successful OTP verification
+        async function completeRegistration() {
+             const name = tempDisplayName;
+             const phone = tempPhoneNumber;
+             
+             if (!db || !userId || !name || !phone) {
+                 alertModal("রেজিস্ট্রেশন ডেটা খুঁজে পাওয়া যায়নি। আবার চেষ্টা করুন।");
+                 switchView('setup');
+                 return;
+             }
+             
              try {
-                const userDocRef = doc(db, `/artifacts/${appId}/public/data/users/`, uid);
+                const userDocRef = doc(db, `/artifacts/${appId}/public/data/users/`, userId);
                 
                 await setDoc(userDocRef, {
                     displayName: name,
+                    phoneNumber: phone,
                     lastSeen: serverTimestamp(),
-                    isOnline: true // Set online upon registration
+                    isOnline: true 
                 }, { merge: true });
                 
                 userDisplayName = name;
-                switchView('users'); // Move to main app view
+                userPhoneNumber = phone;
+                tempDisplayName = null;
+                tempPhoneNumber = null;
+                switchView('users'); 
              } catch (e) {
                  console.error("Error registering user:", e);
-                 alertModal("নাম সেভ করতে সমস্যা হয়েছে।");
+                 alertModal("নাম ও নম্বর সেভ করতে সমস্যা হয়েছে।");
              }
         }
 
@@ -269,47 +307,45 @@
             stopListening();
             messagesEl.innerHTML = '';
             currentView = view;
-            emojiPickerContainer.style.display = 'none'; // Close picker on view change
+            emojiPickerContainer.style.display = 'none'; 
             
             // Hide all content containers
             appContainer.classList.add('hidden');
             setupView.classList.add('hidden');
+            otpView.classList.add('hidden');
             chatView.classList.add('hidden');
             usersView.classList.add('hidden');
             messageInputArea.classList.add('hidden');
             backButton.classList.add('hidden');
-            chatHeaderSubTitle.textContent = ''; // Clear status subtitle
-            
-            // Reset tabs style
-            tabGroupChat.classList.remove('bg-teal-700', 'font-bold');
-            tabUsers.classList.remove('bg-teal-700', 'font-bold');
-            tabGroupChat.classList.add('bg-teal-600');
-            tabUsers.classList.add('bg-teal-600');
+            chatHeaderSubTitle.textContent = ''; 
+            chatAppHeader.classList.add('hidden'); 
             
             // Handle view changes
             if (view === 'setup') {
                 setupView.classList.remove('hidden');
+                displayNameInput.value = tempDisplayName || '';
+                phoneNumberInput.value = tempPhoneNumber || '';
+                return;
+            }
+            if (view === 'otp') {
+                otpView.classList.remove('hidden');
+                otpInput.value = '';
+                otpPhoneDisplay.textContent = `(+88) ${tempPhoneNumber}`;
+                alertModal(`সিমুলেটেড OTP হলো: ${SIMULATED_OTP}. এই পিনটি ব্যবহার করুন।`);
                 return;
             }
             
-            // If not setup, show the main app container
+            // If not setup/otp, show the main app container and header
             appContainer.classList.remove('hidden');
-            chatHeaderTitle.textContent = '💬 সহজ চ্যাট অ্যাপ'; 
-
-            if (view === 'group-chat') {
-                currentRecipientId = null;
-                chatView.classList.remove('hidden');
-                messageInputArea.classList.remove('hidden');
-                tabGroupChat.classList.add('bg-teal-700', 'font-bold');
-                tabGroupChat.classList.remove('bg-teal-600');
-                listenForGroupMessages();
-            } else if (view === 'users') {
-                currentRecipientId = null;
-                usersView.classList.remove('hidden');
-                tabUsers.classList.add('bg-teal-700', 'font-bold');
-                tabUsers.classList.remove('bg-teal-600');
-                fetchAndDisplayUsers();
+            chatAppHeader.classList.remove('hidden');
+            
+            if (view === 'users') {
+                 chatHeaderTitle.textContent = 'চ্যাট তালিকা'; 
+                 document.getElementById('recipient-info').classList.add('hidden');
+                 usersView.classList.remove('hidden');
+                 fetchAndDisplayUsers();
             } else if (view === 'private-chat') {
+                document.getElementById('recipient-info').classList.remove('hidden');
                 chatView.classList.remove('hidden');
                 messageInputArea.classList.remove('hidden');
                 backButton.classList.remove('hidden');
@@ -319,14 +355,33 @@
             }
         }
 
-        // 6. Handle Private Chat initialization
+        // 6. Handle OTP Step: Store temp data and move to OTP screen
+        function handleOtpRequest() {
+            const name = displayNameInput.value.trim();
+            const phone = phoneNumberInput.value.trim();
+            
+            if (name.length < 2) {
+                alertModal("নামটি কমপক্ষে দুটি অক্ষরের হতে হবে।");
+                return;
+            }
+            if (!/^\d{8,15}$/.test(phone)) {
+                 alertModal("অনুগ্রহ করে একটি বৈধ ফোন নম্বর দিন (যেমন: 017xxxxxx, কোনো প্রতীক ছাড়া)।");
+                 return;
+            }
+            
+            tempDisplayName = name;
+            tempPhoneNumber = phone;
+            switchView('otp');
+        }
+
+        // 7. Handle Private Chat initialization
         function openPrivateChat(recipientId, recipientName) {
             currentRecipientId = recipientId;
             currentRecipientName = recipientName;
             switchView('private-chat');
         }
 
-        // 7. Listen for a single recipient's online status
+        // 8. Listen for a single recipient's online status
         function listenForRecipientStatus(recipientId) {
              if (!db || !recipientId) return;
              
@@ -338,13 +393,11 @@
                      let statusText = '';
                      
                      if (data.isOnline) {
-                         statusText = '<span class="text-xs font-medium text-white">Online Now</span>';
+                         statusText = 'Online Now';
                      } else if (data.lastSeen && data.lastSeen.toDate) {
-                         const date = data.lastSeen.toDate();
-                         const timeString = date.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
-                         statusText = `<span class="text-[10px] text-gray-200">Last seen: ${timeString}</span>`;
+                         statusText = `Last seen: ${formatTime(data.lastSeen)}`;
                      }
-                     chatHeaderSubTitle.innerHTML = statusText;
+                     chatHeaderSubTitle.textContent = statusText;
                  }
              }, (error) => {
                  console.error("Error fetching recipient status:", error);
@@ -353,16 +406,15 @@
         }
 
 
-        // 8. Fetch and display all registered users
+        // 9. Fetch and display all registered users
         function fetchAndDisplayUsers() {
             if (!db || !isAuthReady) return;
 
             const usersCollectionPath = `/artifacts/${appId}/public/data/users`;
-            // Order by lastSeen to show active users first
             const q = query(collection(db, usersCollectionPath), orderBy('lastSeen', 'desc'));
 
             onSnapshot(q, (snapshot) => {
-                let usersHtml = '<p class="p-4 text-gray-500 text-sm">অ্যাপ ব্যবহারকারী তালিকা:</p>';
+                let usersHtml = '';
                 snapshot.forEach((doc) => {
                     const data = doc.data();
                     const userUid = doc.id;
@@ -375,32 +427,33 @@
 
                     if (data.isOnline) {
                          lastSeenText = 'Online Now';
-                         statusColor = 'text-green-600 font-semibold';
+                         statusColor = 'text-green-500 font-semibold';
                     } else if (data.lastSeen && data.lastSeen.toDate) {
-                         const date = data.lastSeen.toDate();
-                         // Format last seen time: HH:MM AM/PM
-                         lastSeenText = 'Last seen: ' + date.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
+                         lastSeenText = 'Last seen: ' + formatTime(data.lastSeen);
                     }
 
                     usersHtml += `
                         <div data-user-id="${userUid}" data-user-name="${data.displayName}" 
-                             class="flex items-center p-3 border-b border-gray-200 bg-white hover:bg-gray-50 cursor-pointer transition duration-150 rounded-lg mx-2 mb-1 shadow-sm">
-                            <div class="w-10 h-10 bg-teal-500 rounded-full flex items-center justify-center text-white font-bold text-lg mr-3">
-                                ${data.displayName[0]}
+                             class="flex items-center p-3 border-b border-gray-200 bg-white hover:bg-gray-50 cursor-pointer transition duration-150">
+                            <!-- User Avatar -->
+                            <div class="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg mr-4" style="background-color: ${stringToColor(data.displayName)}">
+                                ${data.displayName[0].toUpperCase()}
                             </div>
+                            <!-- User Info -->
                             <div class="flex-grow">
-                                <p class="text-sm font-semibold text-gray-800">${data.displayName}</p>
-                                <p class="text-xs ${statusColor}">${lastSeenText}</p>
+                                <p class="text-base font-semibold text-gray-800">${data.displayName}</p>
+                                <p class="text-xs ${statusColor} italic">${lastSeenText}</p>
                             </div>
-                            <button class="text-teal-500 text-sm font-medium hover:text-teal-600">
-                                বার্তা পাঠান
-                            </button>
+                            <!-- Phone Number -->
+                            <div class="text-xs text-gray-500">
+                                ${data.phoneNumber}
+                            </div>
                         </div>
                     `;
                 });
                 
                 if (snapshot.size <= 1) {
-                     usersHtml += '<p class="text-center text-gray-500 mt-4 text-sm">অন্য কোনো ব্যবহারকারী পাওয়া যায়নি।</p>';
+                     usersHtml = '<p class="text-center text-gray-500 mt-10 p-4 text-sm">চ্যাট তালিকায় কোনো বন্ধু নেই। অন্য একটি ডিভাইসে অ্যাপটি খুলে লগইন করুন।</p>';
                 }
                 
                 userListContainer.innerHTML = usersHtml;
@@ -414,31 +467,4 @@
                 });
                 
             }, (error) => {
-                console.error("Error fetching user list:", error);
-            });
-        }
-
-        // 9. Generic Message Renderer
-        function renderMessages(snapshot) {
-            let messagesHtml = '';
-            const isGroupChat = currentView === 'group-chat';
-
-            snapshot.forEach((doc) => {
-                const data = doc.data();
-                const isMyMessage = data.userId === userId;
-                const messageClass = isMyMessage ? 'self-end my-message' : 'self-start other-message';
-                const senderDisplayName = data.displayName || data.userId.substring(0, 8) + '...';
-
-                // Format timestamp
-                let timeString = '';
-                if (data.timestamp && data.timestamp.toDate) {
-                    const date = data.timestamp.toDate();
-                    // Accurate time format: HH:MM AM/PM
-                    timeString = date.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
-                }
-
-                messagesHtml += `
-                    <div class="flex flex-col mb-4 max-w-[80%] ${isMyMessage ? 'ml-auto' : 'mr-auto'}">
-                        <div class="p-3 rounded-xl shadow-md text-gray-800 ${messageClass} min-w-[120px] break-words">
-                            ${isGroupChat && !isMyMessage ? `<div class="text-[10px] text-teal-700 font-bold mb-1">${senderDisplayName}</div>` : ''}
-                            <p class="text-sm font-medium mb-1">
+                console.error("Error fetching user
